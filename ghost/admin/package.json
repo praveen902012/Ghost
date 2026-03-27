@@ -48,7 +48,7 @@
     "@tryghost/color-utils": "0.2.10",
     "@tryghost/ember-promise-modals": "2.0.1",
     "@tryghost/helpers": "1.1.97",
-    "@tryghost/kg-clean-basic-html": "4.2.21",
+    "@tryghost/kg-clean-basic-html": "4.2.22",
     "@tryghost/kg-converters": "1.1.20",
     "@tryghost/koenig-lexical": "1.7.28",
     "@tryghost/limit-service": "1.4.1",
