@@ -7,6 +7,8 @@ import {MembersPage} from '@/admin-pages';
 usePerTestIsolation();
 
 test.describe('Ghost Admin - Member Filter Actions', () => {
+    test.use({labs: {membersForward: false}});
+
     let memberFactory: MemberFactory;
 
     const membersFixture = [
