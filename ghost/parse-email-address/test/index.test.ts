@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {parseEmailAddress} from '../src';
+import {parseEmailAddress} from '../src/index';
 
 describe('parseEmailAddress', function () {
     it('returns null for invalid email addresses', function () {

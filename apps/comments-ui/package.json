@@ -15,20 +15,20 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "dev": "concurrently \"yarn preview --host -l silent\" \"yarn build:watch\"",
+    "dev": "concurrently \"pnpm preview --host -l silent\" \"pnpm build:watch\"",
     "dev:test": "vite build && vite preview --port 7175",
     "build": "vite build",
     "build:watch": "vite build --watch",
     "preview": "vite preview",
-    "test": "yarn test:unit && yarn test:e2e",
+    "test": "pnpm test:unit && pnpm test:e2e",
     "test:unit": "vitest run --coverage",
     "test:e2e": "NODE_OPTIONS='--experimental-specifier-resolution=node --no-warnings' VITE_TEST=true playwright test",
-    "test:slowmo": "TIMEOUT=100000 PLAYWRIGHT_SLOWMO=1000 yarn test:e2e --headed",
-    "test:e2e:full": "ALL_BROWSERS=1 yarn test:e2e",
+    "test:slowmo": "TIMEOUT=100000 PLAYWRIGHT_SLOWMO=1000 pnpm test:e2e --headed",
+    "test:e2e:full": "ALL_BROWSERS=1 pnpm test:e2e",
     "lint": "eslint src --ext .js,.ts,.jsx,.tsx --cache",
-    "preship": "yarn lint",
+    "preship": "pnpm lint",
     "ship": "node ../../.github/scripts/release-apps.js",
-    "prepublishOnly": "yarn build"
+    "prepublishOnly": "pnpm build"
   },
   "browserslist": {
     "production": [
@@ -63,7 +63,7 @@
     "@testing-library/jest-dom": "5.17.0",
     "@testing-library/react": "12.1.5",
     "@testing-library/user-event": "14.6.1",
-    "@tryghost/i18n": "0.0.0",
+    "@tryghost/i18n": "workspace:*",
     "@vitejs/plugin-react": "4.7.0",
     "@vitest/coverage-v8": "0.34.6",
     "autoprefixer": "10.4.21",

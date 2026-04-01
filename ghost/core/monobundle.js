@@ -59,17 +59,49 @@ class JSONFile {
 }
 
 /**
- * @param {object} packageJson
+ * @param {string} dir
+ * @returns {string[]|null}
  */
-function getPackages(packageJson) {
-    if (!('workspaces' in packageJson)) {
-        return null;
+function getWorkspacePackages(dir) {
+    // pnpm: read from pnpm-workspace.yaml
+    const pnpmWorkspace = path.join(dir, 'pnpm-workspace.yaml');
+    if (fs.existsSync(pnpmWorkspace)) {
+        const content = fs.readFileSync(pnpmWorkspace, 'utf8');
+        const packages = [];
+        let inPackages = false;
+        for (const line of content.split('\n')) {
+            if (/^packages:/.test(line)) {
+                inPackages = true;
+                continue;
+            }
+            if (inPackages) {
+                const match = line.match(/^\s+-\s+['"]?([^'"]+)['"]?\s*$/);
+                if (match) {
+                    packages.push(match[1]);
+                } else if (/^\S/.test(line)) {
+                    break;
+                }
+            }
+        }
+        if (packages.length > 0) {
+            return packages;
+        }
     }
-    const {workspaces} = packageJson;
-    if (Array.isArray(workspaces)) {
-        return workspaces;
+
+    // Fallback: yarn/npm workspaces field in package.json
+    const pkg = path.join(dir, 'package.json');
+    if (fs.existsSync(pkg)) {
+        const packageJson = require(pkg);
+        if ('workspaces' in packageJson) {
+            const {workspaces} = packageJson;
+            if (Array.isArray(workspaces)) {
+                return workspaces;
+            }
+            return workspaces.packages || null;
+        }
     }
-    return workspaces.packages || null;
+
+    return null;
 }
 
 /**
@@ -78,11 +110,10 @@ function getPackages(packageJson) {
  */
 function getWorkspaces(from) {
     const root = findRoot(from, (dir) => {
-        const pkg = path.join(dir, 'package.json');
-        return fs.existsSync(pkg) && getPackages(require(pkg)) !== null;
+        return getWorkspacePackages(dir) !== null;
     });
 
-    const packages = getPackages(require(path.join(root, 'package.json')));
+    const packages = getWorkspacePackages(root);
     return flattenDeep(packages.map(name => glob.sync(path.join(root, `${name}/`))));
 }
 
@@ -142,9 +173,57 @@ function getWorkspaces(from) {
         }
 
         console.log(`[${workspacePkgInfo.pkg.name}] resolution override => ${packedFilename}\n`);
+        if (!pkgInfo.pkg.resolutions) {
+            pkgInfo.pkg.resolutions = {};
+        }
         pkgInfo.pkg.resolutions[workspacePkgInfo.pkg.name] = packedFilename;
 
         packagesToPack.push(w);
+    }
+
+    // Copy pnpm.overrides from the root workspace package.json so that
+    // production installs (e.g. inside Docker) pin the same versions as
+    // the workspace — without these, transitive deps like moment-timezone
+    // may resolve a different moment instance than ghost/core declares.
+    const rootPkgPath = path.join(findRoot(path.dirname(nearestPkgJson)), 'package.json');
+    const rootPkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8'));
+    if (rootPkg.pnpm && rootPkg.pnpm.overrides) {
+        // Collect workspace package names so we can skip their overrides
+        // (they are already referenced as file:components/*.tgz dependencies)
+        const workspaceNames = new Set(workspaces
+            .map((w) => {
+                const wpkg = path.join(w, 'package.json');
+                return fs.existsSync(wpkg) ? JSON.parse(fs.readFileSync(wpkg, 'utf8')).name : null;
+            })
+            .filter(Boolean));
+
+        const filteredOverrides = {};
+        for (const [key, value] of Object.entries(rootPkg.pnpm.overrides)) {
+            if (!workspaceNames.has(key)) {
+                filteredOverrides[key] = value;
+            }
+        }
+
+        if (!pkgInfo.pkg.pnpm) {
+            pkgInfo.pkg.pnpm = {};
+        }
+        pkgInfo.pkg.pnpm.overrides = Object.assign(
+            {},
+            filteredOverrides,
+            pkgInfo.pkg.pnpm.overrides
+        );
+        console.log('Copied pnpm.overrides from root:', Object.keys(pkgInfo.pkg.pnpm.overrides).join(', '));
+    }
+
+    // Copy pnpm.onlyBuiltDependencies so that native addons (e.g. sqlite3)
+    // are allowed to run their install scripts during production installs.
+    // Without this, pnpm v10 blocks all build scripts by default.
+    if (rootPkg.pnpm && rootPkg.pnpm.onlyBuiltDependencies) {
+        if (!pkgInfo.pkg.pnpm) {
+            pkgInfo.pkg.pnpm = {};
+        }
+        pkgInfo.pkg.pnpm.onlyBuiltDependencies = rootPkg.pnpm.onlyBuiltDependencies;
+        console.log('Copied pnpm.onlyBuiltDependencies from root:', pkgInfo.pkg.pnpm.onlyBuiltDependencies.join(', '));
     }
 
     pkgInfo.write();
@@ -165,7 +244,7 @@ function getWorkspaces(from) {
     const filesToCopy = [
         'README.md',
         'LICENSE',
-        'yarn.lock'
+        'pnpm-lock.yaml'
     ];
 
     for (const file of filesToCopy) {

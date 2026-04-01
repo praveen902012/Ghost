@@ -106,7 +106,7 @@ jobs:
             shared: &shared
               - '.github/**'
               - 'package.json'
-              - 'yarn.lock'
+              - 'pnpm-lock.yaml'
             core:
               - *shared
               - 'ghost/**'
@@ -148,18 +148,18 @@ jobs:
               - '!**/*.md'
 
       - name: Compute lockfile hash
-        run: echo "hash=lockfile-${{ hashFiles('yarn.lock') }}" >> "$GITHUB_ENV"
+        run: echo "hash=lockfile-${{ hashFiles('pnpm-lock.yaml') }}" >> "$GITHUB_ENV"
 
       - name: Compute dependency cache key
-        run: echo "cachekey=dep-cache-${{ hashFiles('yarn.lock') }}-${{ env.HEAD_COMMIT }}" >> "$GITHUB_ENV"
+        run: echo "cachekey=pnpm-dep-cache-${{ hashFiles('pnpm-lock.yaml') }}-${{ env.HEAD_COMMIT }}" >> "$GITHUB_ENV"
 
       - name: Compute dependency cache restore key
         run: |
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "DEPENDENCY_CACHE_RESTORE_KEYS<<$EOF" >> "$GITHUB_ENV"
-          echo "dep-cache-${{ env.hash }}-${{ github.sha }}" >> "$GITHUB_ENV"
-          echo "dep-cache-${{ env.hash }}" >> "$GITHUB_ENV"
-          echo "dep-cache" >> "$GITHUB_ENV"
+          echo "pnpm-dep-cache-${{ env.hash }}-${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "pnpm-dep-cache-${{ env.hash }}" >> "$GITHUB_ENV"
+          echo "pnpm-dep-cache" >> "$GITHUB_ENV"
           echo "$EOF" >> "$GITHUB_ENV"
 
       - name: Nx cache
@@ -186,6 +186,7 @@ jobs:
         run: |
           echo 'matrix=["22.18.0"]' >> $GITHUB_OUTPUT
 
+      - uses: pnpm/action-setup@v4
       - name: Set up Node
         uses: actions/setup-node@v4
         env:
@@ -251,6 +252,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1000
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -267,7 +269,7 @@ jobs:
           path: ghost/**/.eslintcache
           key: eslint-cache
 
-      - run: yarn nx affected -t lint --base=${{ needs.job_setup.outputs.BASE_COMMIT }}
+      - run: pnpm nx affected -t lint --base=${{ needs.job_setup.outputs.BASE_COMMIT }}
 
       - uses: tryghost/actions/actions/slack-build@main
         if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -288,6 +290,7 @@ jobs:
         || needs.job_setup.outputs.changed_core == 'true'
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -298,7 +301,7 @@ jobs:
           DEPENDENCY_CACHE_KEY: ${{ needs.job_setup.outputs.dependency_cache_key }}
 
       - name: Run i18n tests
-        run: yarn nx run @tryghost/i18n:test
+        run: pnpm nx run @tryghost/i18n:test
 
   job_admin-tests:
     runs-on: ubuntu-latest
@@ -312,6 +315,7 @@ jobs:
       COVERAGE: true
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -321,13 +325,13 @@ jobs:
         env:
           DEPENDENCY_CACHE_KEY: ${{ needs.job_setup.outputs.dependency_cache_key }}
 
-      - run: yarn nx run ghost-admin:test
+      - run: pnpm nx run ghost-admin:test
         env:
           BROWSER: Chrome
 
       # Merge coverage reports and upload
       - name: Merge Admin test coverage
-        run: yarn ember coverage-merge
+        run: pnpm ember coverage-merge
         working-directory: ghost/admin
       - uses: actions/upload-artifact@v4
         with:
@@ -353,6 +357,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 1000
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -372,16 +377,16 @@ jobs:
       - name: Determine affected unit-test projects
         id: affected_unit_projects
         run: |
-          PROJECTS=$(yarn -s nx show projects --affected --withTarget=test:unit --base=${{ needs.job_setup.outputs.BASE_COMMIT }} --sep=, | tr -d '\n')
+          PROJECTS=$(pnpm --silent nx show projects --affected --withTarget=test:unit --base=${{ needs.job_setup.outputs.BASE_COMMIT }} --sep=, | tr -d '\n')
           echo "projects=$PROJECTS" >> "$GITHUB_OUTPUT"
 
       # Build only projects that will run unit tests
       - name: Build assets for affected unit tests
         if: steps.affected_unit_projects.outputs.projects != ''
-        run: yarn nx run-many -t build --projects="${{ steps.affected_unit_projects.outputs.projects }}"
+        run: pnpm nx run-many -t build --projects="${{ steps.affected_unit_projects.outputs.projects }}"
 
       - name: Run unit tests
-        run: yarn nx affected -t test:unit --base=${{ needs.job_setup.outputs.BASE_COMMIT }}
+        run: pnpm nx affected -t test:unit --base=${{ needs.job_setup.outputs.BASE_COMMIT }}
         env:
           FORCE_COLOR: 0
           GHOST_UNIT_TEST_VARIANT: ci
@@ -436,6 +441,7 @@ jobs:
     name: Acceptance tests (Node ${{ matrix.node }}, ${{ matrix.env.DB }})
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -448,7 +454,7 @@ jobs:
           DEPENDENCY_CACHE_KEY: ${{ needs.job_setup.outputs.dependency_cache_key }}
 
       - name: Build TS packages
-        run: yarn nx run-many -t build --exclude=ghost-admin
+        run: pnpm nx run-many -t build --exclude=ghost-admin
 
       - name: Set timezone (non-UTC)
         uses: szenius/set-timezone@v2.0
@@ -468,11 +474,11 @@ jobs:
 
       - name: E2E tests
         working-directory: ghost/core
-        run: yarn test:ci:e2e
+        run: pnpm test:ci:e2e
 
       - name: Integration tests
         working-directory: ghost/core
-        run: yarn test:ci:integration
+        run: pnpm test:ci:integration
 
       - uses: actions/upload-artifact@v4
         if: matrix.node == env.NODE_VERSION && contains(matrix.env.DB, 'mysql')
@@ -526,6 +532,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: true
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -538,7 +545,7 @@ jobs:
           DEPENDENCY_CACHE_KEY: ${{ needs.job_setup.outputs.dependency_cache_key }}
 
       - name: Build TS packages
-        run: yarn nx run-many -t build --exclude=ghost-admin
+        run: pnpm nx run-many -t build --exclude=ghost-admin
 
       - name: Set env vars (SQLite)
         if: contains(matrix.env.DB, 'sqlite')
@@ -553,7 +560,7 @@ jobs:
 
       - name: Legacy tests
         working-directory: ghost/core
-        run: yarn test:ci:legacy
+        run: pnpm test:ci:legacy
 
       - uses: tryghost/actions/actions/slack-build@main
         if: failure() && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -571,6 +578,7 @@ jobs:
       CI: true
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -585,7 +593,7 @@ jobs:
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
 
-      - run: yarn nx run @tryghost/admin-x-settings:test:acceptance
+      - run: pnpm nx run @tryghost/admin-x-settings:test:acceptance
 
       - name: Upload test results
         if: always()
@@ -611,6 +619,7 @@ jobs:
       CI: true
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -625,7 +634,7 @@ jobs:
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
 
-      - run: yarn nx run @tryghost/activitypub:test:acceptance
+      - run: pnpm nx run @tryghost/activitypub:test:acceptance
 
       - name: Upload test results
         if: always()
@@ -651,6 +660,7 @@ jobs:
       CI: true
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -665,7 +675,7 @@ jobs:
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
 
-      - run: yarn nx run @tryghost/comments-ui:test
+      - run: pnpm nx run @tryghost/comments-ui:test
 
       - name: Upload test results
         if: always()
@@ -691,6 +701,7 @@ jobs:
       CI: true
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -705,7 +716,7 @@ jobs:
       - name: Setup Playwright
         uses: ./.github/actions/setup-playwright
 
-      - run: yarn nx run @tryghost/signup-form:test:e2e
+      - run: pnpm nx run @tryghost/signup-form:test:e2e
 
       - name: Upload test results
         if: always()
@@ -763,6 +774,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -779,7 +791,7 @@ jobs:
 
       - run: node .github/scripts/bump-version.js canary
 
-      - run: yarn archive
+      - run: pnpm archive
 
       - run: mv ghost-*.tgz ghost.tgz
         working-directory: ghost/core
@@ -827,6 +839,7 @@ jobs:
         with:
           submodules: true
 
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         env:
           FORCE_COLOR: 0
@@ -846,10 +859,10 @@ jobs:
             export GHOST_BUILD_VERSION="${PKG_VERSION}+${SHORT_SHA}"
             echo "GHOST_BUILD_VERSION=${GHOST_BUILD_VERSION}" >> $GITHUB_ENV
           fi
-          yarn build:production
+          pnpm build:production
 
       - name: Pack standalone distribution
-        run: yarn workspace ghost pack:standalone
+        run: pnpm --filter ghost pack:standalone
 
       - name: Prepare Docker build context
         run: mv ghost/core/package/ /tmp/ghost-production/
@@ -1077,6 +1090,7 @@ jobs:
       - name: Setup Docker Registry Mirrors
         uses: ./.github/actions/setup-docker-registry-mirrors
 
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -1107,7 +1121,7 @@ jobs:
 
       - name: Stop E2E infra
         if: always()
-        run: yarn workspace @tryghost/e2e infra:down
+        run: pnpm --filter @tryghost/e2e infra:down
 
       - name: Upload blob report to GitHub Actions Artifacts
         if: failure()
@@ -1143,6 +1157,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -1329,6 +1344,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -1377,7 +1393,7 @@ jobs:
 
       - name: Build the package
         if: steps.version_check.outputs.version_changed == 'true'
-        run: yarn run nx build ${{ matrix.package_name }}
+        run: pnpm run nx build ${{ matrix.package_name }}
 
       - name: Configure .npmrc
         if: steps.version_check.outputs.version_changed == 'true'

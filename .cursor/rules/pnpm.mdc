@@ -1,0 +1,7 @@
+---
+description:
+globs:
+alwaysApply: true
+---
+This repository uses pnpm as a package manager.
+All commands are prefixed with `pnpm` instead of `npm` or `yarn`.
